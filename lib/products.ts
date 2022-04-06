@@ -1,18 +1,18 @@
 export const products = [
   {
-    id: 'box-of-cookies',
-    name: 'Box',
-    description: 'A delicious box of handmade cookies',
-    unitName: 'box', // shows after the price, eg. 0.05 SOL/box
+    id: 'iphone-13-pro-max',
+    name: 'iPhone 13 Pro Max',
+    description: 'Charger ~~and phone~~ sold seperately',
+    unitName: 'iphone',
     priceSol: 0.05,
     priceUsd: 5,
   },
   {
-    id: 'basket-of-cookies',
-    name: 'Basket',
-    description: 'A large basket of handmade cookies',
-    unitName: 'basket',
+    id: 'studio-display',
+    name: 'Apple Studio Display',
+    description: 'iPhone 11 inside a monitor',
+    unitName: 'moniter',
     priceSol: 0.1,
     priceUsd: 10,
-  }
+  },
 ]
