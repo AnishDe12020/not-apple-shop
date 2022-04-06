@@ -1,4 +1,10 @@
+import {
+  createTransferCheckedInstruction,
+  getAssociatedTokenAddress,
+  getMint,
+} from '@solana/spl-token'
 import { WalletAdapterNetwork } from '@solana/wallet-adapter-base'
+import { ConnectionContext } from '@solana/wallet-adapter-react'
 import {
   clusterApiUrl,
   Connection,
@@ -8,7 +14,7 @@ import {
   LAMPORTS_PER_SOL,
 } from '@solana/web3.js'
 import { NextApiRequest, NextApiResponse } from 'next'
-import { shopAddress } from '../../lib/addresses'
+import { shopAddress, usdcAddress } from '../../lib/addresses'
 import calculatePrice from '../../lib/calculatePrice'
 
 export type MakeTransactionInputData = {
@@ -54,6 +60,16 @@ const handler = async (
     const endpoint = clusterApiUrl(network)
     const connection = new Connection(endpoint)
 
+    const usdcMint = await getMint(connection, usdcAddress)
+    const buyerUsdcAddress = await getAssociatedTokenAddress(
+      usdcAddress,
+      buyerPublicKey
+    )
+    const shopUsdcAddress = await getAssociatedTokenAddress(
+      usdcAddress,
+      shopPublicKey
+    )
+
     const { blockhash } = await connection.getLatestBlockhash('finalized')
 
     const transaction = new Transaction({
@@ -61,11 +77,14 @@ const handler = async (
       feePayer: buyerPublicKey,
     })
 
-    const transferInstruction = SystemProgram.transfer({
-      fromPubkey: buyerPublicKey,
-      lamports: amount.multipliedBy(LAMPORTS_PER_SOL).toNumber(),
-      toPubkey: shopPublicKey,
-    })
+    const transferInstruction = createTransferCheckedInstruction(
+      buyerUsdcAddress, // source
+      usdcAddress, // mint (token address)
+      shopUsdcAddress, // destination
+      buyerPublicKey, // owner of source address
+      amount.toNumber() * 10 ** (await usdcMint).decimals, // amount to transfer (in units of the USDC token)
+      usdcMint.decimals // decimals of the USDC token
+    )
 
     transferInstruction.keys.push({
       pubkey: new PublicKey(reference),
