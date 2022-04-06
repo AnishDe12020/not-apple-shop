@@ -11,7 +11,7 @@ export const products = [
     id: 'studio-display',
     name: 'Apple Studio Display',
     description: 'iPhone 11 inside a monitor',
-    unitName: 'moniter',
+    unitName: 'monitor',
     priceSol: 0.1,
     priceUsd: 10,
   },
