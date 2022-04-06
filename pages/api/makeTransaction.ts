@@ -2,19 +2,19 @@ import {
   createTransferCheckedInstruction,
   getAssociatedTokenAddress,
   getMint,
+  getOrCreateAssociatedTokenAccount,
 } from '@solana/spl-token'
 import { WalletAdapterNetwork } from '@solana/wallet-adapter-base'
-import { ConnectionContext } from '@solana/wallet-adapter-react'
 import {
   clusterApiUrl,
   Connection,
+  Keypair,
   PublicKey,
   Transaction,
-  SystemProgram,
-  LAMPORTS_PER_SOL,
 } from '@solana/web3.js'
+import base58 from 'bs58'
 import { NextApiRequest, NextApiResponse } from 'next'
-import { shopAddress, usdcAddress } from '../../lib/addresses'
+import { couponAddress, shopAddress, usdcAddress } from '../../lib/addresses'
 import calculatePrice from '../../lib/calculatePrice'
 
 export type MakeTransactionInputData = {
@@ -66,12 +66,29 @@ const post = async (
       return
     }
 
+    const shopPrivateKey = process.env.SHOP_PRIVATE_KEY as string
+if (!shopPrivateKey) {
+  res.status(500).json({ error: "Shop private key not available" })
+}
+const shopKeypair = Keypair.fromSecretKey(base58.decode(shopPrivateKey))
+
     const buyerPublicKey = new PublicKey(account)
     const shopPublicKey = shopAddress
 
     const network = WalletAdapterNetwork.Devnet
     const endpoint = clusterApiUrl(network)
     const connection = new Connection(endpoint)
+
+      const buyerCouponAddress = await getOrCreateAssociatedTokenAccount(
+      connection,
+      shopKeypair, // shop pays the fee to create it
+      couponAddress, // which token the account is for
+      buyerPublicKey, // who the token account belongs to (the buyer)
+    ).then(account => account.address)
+
+
+
+    const shopCouponAddress = await getAssociatedTokenAddress(couponAddress, shopPublicKey)
 
     const usdcMint = await getMint(connection, usdcAddress)
     const buyerUsdcAddress = await getAssociatedTokenAddress(
@@ -105,7 +122,18 @@ const post = async (
       isWritable: false,
     })
 
-    transaction.add(transferInstruction)
+     const couponInstruction = createTransferCheckedInstruction(
+      shopCouponAddress, // source account (coupon)
+      couponAddress, // token address (coupon)
+      buyerCouponAddress, // destination account (coupon)
+      shopPublicKey, // owner of source account
+      1, // amount to transfer
+      0, // decimals of the token - we know this is 0
+    )
+
+    transaction.add(transferInstruction, couponInstruction)
+
+     transaction.partialSign(shopKeypair)
 
     const serializedTransaction = transaction.serialize({
       requireAllSignatures: false,
