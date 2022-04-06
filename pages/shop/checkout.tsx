@@ -1,15 +1,18 @@
 import { NextPage } from 'next'
-import { createQR, encodeURL, EncodeURLComponents } from '@solana/pay'
-import { Keypair } from '@solana/web3.js'
+import { createQR, encodeURL, EncodeURLComponents, findTransactionSignature, FindTransactionSignatureError, validateTransactionSignature, ValidateTransactionSignatureError } from '@solana/pay'
+import { Connection, Keypair } from '@solana/web3.js'
 import { useRouter } from 'next/router'
 import { useEffect, useMemo, useRef } from 'react'
 import BackLink from '../../components/BackLink'
 import PageHeading from '../../components/PageHeading'
 import { shopAddress, usdcAddress } from '../../lib/addresses'
 import calculatePrice from '../../lib/calculatePrice'
+import { useConnection } from '@solana/wallet-adapter-react'
 
 const Checkout: NextPage = () => {
   const router = useRouter()
+
+    const { connection } = useConnection()
 
   const qrRef = useRef<HTMLDivElement>(null)
 
@@ -36,6 +39,28 @@ const Checkout: NextPage = () => {
       qr.append(qrRef.current)
     }
   })
+
+   useEffect(() => {
+    const interval = setInterval(async () => {
+      try {
+        const signatureInfo = await findTransactionSignature(connection, reference, {}, 'confirmed')
+        await validateTransactionSignature(connection, signatureInfo.signature, shopAddress, amount, usdcAddress, reference, 'confirmed')
+        router.push('/shop/confirmed')
+      } catch (e) {
+        if (e instanceof FindTransactionSignatureError) {
+          return;
+        }
+        if (e instanceof ValidateTransactionSignatureError) {
+          console.error('Transaction is invalid', e)
+          return;
+        }
+        console.error('Unknown error', e)
+      }
+    }, 500)
+    return () => {
+      clearInterval(interval)
+    }
+  }, [])
 
   return (
     <div className="flex flex-col items-center gap-8">
