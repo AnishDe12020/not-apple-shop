@@ -1,6 +1,10 @@
 import { WalletMultiButton } from '@solana/wallet-adapter-react-ui'
 import { Keypair, Transaction } from '@solana/web3.js'
 import { useConnection, useWallet } from '@solana/wallet-adapter-react'
+import {
+  findTransactionSignature,
+  FindTransactionSignatureError,
+} from '@solana/pay'
 import { NextPage } from 'next'
 import { useRouter } from 'next/router'
 import { useEffect, useMemo, useState } from 'react'
@@ -90,6 +94,30 @@ const Checkout: NextPage = () => {
   useEffect(() => {
     trySendTransaction()
   }, [transaction])
+
+  useEffect(() => {
+    const interval = setInterval(async () => {
+      try {
+        // Check if there is any transaction for the reference
+       await findTransactionSignature(
+          connection,
+          reference,
+          {}
+        )
+        router.push('/confirmed')
+        console.log('They paid!!!')
+      } catch (e) {
+        if (e instanceof FindTransactionSignatureError) {
+          // No transaction found yet, ignore this error
+          return
+        }
+        console.error('Unknown error', e)
+      }
+    }, 500)
+    return () => {
+      clearInterval(interval)
+    }
+  }, [])
 
   if (!publicKey) {
     return (
