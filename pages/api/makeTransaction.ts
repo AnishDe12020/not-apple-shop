@@ -26,11 +26,24 @@ export type MakeTransactionOutputData = {
   message: string
 }
 
+export type MakeTransactionGetResponse = {
+  label: string,
+  icon: string,
+}
+
+
 type ErrorOutput = {
   error: string
 }
 
-const handler = async (
+const get = (res: NextApiResponse<MakeTransactionGetResponse>) => {
+res.status(200).json({
+    label: "Not Apple Inc",
+    icon: "https://freesvg.org/img/1370962427.png",
+  })
+}
+
+const post = async (
   req: NextApiRequest,
   res: NextApiResponse<MakeTransactionOutputData | ErrorOutput>
 ) => {
@@ -109,6 +122,16 @@ const handler = async (
 
     res.status(500).json({ error: 'error creating transaction' })
     return
+  }
+}
+
+const handler = async (req: NextApiRequest, res: NextApiResponse<MakeTransactionGetResponse | MakeTransactionOutputData | ErrorOutput>) => {
+  if (req.method === "GET") {
+    return get(res)
+  } else if (req.method === "POST") {
+    return await post(req, res)
+  } else {
+    return res.status(405).json({ error: "Method not allowed" })
   }
 }
 
