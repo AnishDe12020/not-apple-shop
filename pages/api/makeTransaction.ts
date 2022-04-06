@@ -27,19 +27,18 @@ export type MakeTransactionOutputData = {
 }
 
 export type MakeTransactionGetResponse = {
-  label: string,
-  icon: string,
+  label: string
+  icon: string
 }
-
 
 type ErrorOutput = {
   error: string
 }
 
 const get = (res: NextApiResponse<MakeTransactionGetResponse>) => {
-res.status(200).json({
-    label: "Not Apple Inc",
-    icon: "https://freesvg.org/img/1370962427.png",
+  res.status(200).json({
+    label: 'Not Apple Inc',
+    icon: 'https://freesvg.org/img/1370962427.png',
   })
 }
 
@@ -67,10 +66,10 @@ const post = async (
     }
 
     const shopPrivateKey = process.env.SHOP_PRIVATE_KEY as string
-if (!shopPrivateKey) {
-  res.status(500).json({ error: "Shop private key not available" })
-}
-const shopKeypair = Keypair.fromSecretKey(base58.decode(shopPrivateKey))
+    if (!shopPrivateKey) {
+      res.status(500).json({ error: 'Shop private key not available' })
+    }
+    const shopKeypair = Keypair.fromSecretKey(base58.decode(shopPrivateKey))
 
     const buyerPublicKey = new PublicKey(account)
     const shopPublicKey = shopAddress
@@ -79,16 +78,19 @@ const shopKeypair = Keypair.fromSecretKey(base58.decode(shopPrivateKey))
     const endpoint = clusterApiUrl(network)
     const connection = new Connection(endpoint)
 
-      const buyerCouponAddress = await getOrCreateAssociatedTokenAccount(
+    const buyerCouponAccount = await getOrCreateAssociatedTokenAccount(
       connection,
       shopKeypair, // shop pays the fee to create it
       couponAddress, // which token the account is for
-      buyerPublicKey, // who the token account belongs to (the buyer)
-    ).then(account => account.address)
+      buyerPublicKey // who the token account belongs to (the buyer)
+    )
 
+    const buyerGetsCouponDiscount = buyerCouponAccount.amount >= 5
 
-
-    const shopCouponAddress = await getAssociatedTokenAddress(couponAddress, shopPublicKey)
+    const shopCouponAddress = await getAssociatedTokenAddress(
+      couponAddress,
+      shopPublicKey
+    )
 
     const usdcMint = await getMint(connection, usdcAddress)
     const buyerUsdcAddress = await getAssociatedTokenAddress(
@@ -107,12 +109,14 @@ const shopKeypair = Keypair.fromSecretKey(base58.decode(shopPrivateKey))
       feePayer: buyerPublicKey,
     })
 
+    const amountToPay = buyerGetsCouponDiscount ? amount.dividedBy(2) : amount
+
     const transferInstruction = createTransferCheckedInstruction(
       buyerUsdcAddress, // source
       usdcAddress, // mint (token address)
       shopUsdcAddress, // destination
       buyerPublicKey, // owner of source address
-      amount.toNumber() * 10 ** (await usdcMint).decimals, // amount to transfer (in units of the USDC token)
+      amountToPay.toNumber() * 10 ** (await usdcMint).decimals, // amount to transfer (in units of the USDC token)
       usdcMint.decimals // decimals of the USDC token
     )
 
@@ -122,18 +126,35 @@ const shopKeypair = Keypair.fromSecretKey(base58.decode(shopPrivateKey))
       isWritable: false,
     })
 
-     const couponInstruction = createTransferCheckedInstruction(
-      shopCouponAddress, // source account (coupon)
-      couponAddress, // token address (coupon)
-      buyerCouponAddress, // destination account (coupon)
-      shopPublicKey, // owner of source account
-      1, // amount to transfer
-      0, // decimals of the token - we know this is 0
-    )
+    const couponInstruction = buyerGetsCouponDiscount
+      ? // The coupon instruction is to send 5 coupons from the buyer to the shop
+        createTransferCheckedInstruction(
+          buyerCouponAccount.address, // source account (coupons)
+          couponAddress, // token address (coupons)
+          shopCouponAddress, // destination account (coupons)
+          buyerPublicKey, // owner of source account
+          5, // amount to transfer
+          0 // decimals of the token - we know this is 0
+        )
+      : // The coupon instruction is to send 1 coupon from the shop to the buyer
+        createTransferCheckedInstruction(
+          shopCouponAddress, // source account (coupon)
+          couponAddress, // token address (coupon)
+          buyerCouponAccount.address, // destination account (coupon)
+          shopPublicKey, // owner of source account
+          1, // amount to transfer
+          0 // decimals of the token - we know this is 0
+        )
+
+    couponInstruction.keys.push({
+      pubkey: shopPublicKey,
+      isSigner: true,
+      isWritable: false,
+    })
 
     transaction.add(transferInstruction, couponInstruction)
 
-     transaction.partialSign(shopKeypair)
+    transaction.partialSign(shopKeypair)
 
     const serializedTransaction = transaction.serialize({
       requireAllSignatures: false,
@@ -141,9 +162,13 @@ const shopKeypair = Keypair.fromSecretKey(base58.decode(shopPrivateKey))
 
     const base64 = serializedTransaction.toString('base64')
 
+    const message = buyerGetsCouponDiscount
+      ? '50% Discount! 💰'
+      : 'Thanks for emptying your pockets 💰'
+
     res.status(200).json({
       transaction: base64,
-      message: 'Thanks for emptying your pockets 💰',
+      message,
     })
   } catch (err) {
     console.error(err)
@@ -153,13 +178,18 @@ const shopKeypair = Keypair.fromSecretKey(base58.decode(shopPrivateKey))
   }
 }
 
-const handler = async (req: NextApiRequest, res: NextApiResponse<MakeTransactionGetResponse | MakeTransactionOutputData | ErrorOutput>) => {
-  if (req.method === "GET") {
+const handler = async (
+  req: NextApiRequest,
+  res: NextApiResponse<
+    MakeTransactionGetResponse | MakeTransactionOutputData | ErrorOutput
+  >
+) => {
+  if (req.method === 'GET') {
     return get(res)
-  } else if (req.method === "POST") {
+  } else if (req.method === 'POST') {
     return await post(req, res)
   } else {
-    return res.status(405).json({ error: "Method not allowed" })
+    return res.status(405).json({ error: 'Method not allowed' })
   }
 }
 
